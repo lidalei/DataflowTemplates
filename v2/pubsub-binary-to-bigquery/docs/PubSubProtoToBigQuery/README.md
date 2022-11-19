@@ -105,6 +105,9 @@ The template requires the following parameters:
 *   outputTableSpec: Output BigQuery table. For example,
     \<project\>:\<dataset\>.\<table_name\>. If the table already exists, it must
     have a schema already set.
+*   bigQueryTableSchemaPath: GCS path to BigQuery schema file. For example,
+    gs://MyBucket/bq_schema.json. If this is not set, then the schema is
+    inferred from the Proto schema.
 
 The template has the following optional parameters:
 
@@ -112,9 +115,6 @@ The template has the following optional parameters:
     the proto schema. "false" to convert the names to lowerCamelCase. This will
     determine the field names for the BigQuery table and input to the JavaScript
     UDF. (Default: "false")
-*   bigQueryTableSchemaPath: GCS path to BigQuery schema file. For example,
-    gs://MyBucket/bq_schema.json. If this is not set, then the schema is
-    inferred from the Proto schema.
 *   javascriptTextTransformGcsPath: GCS path to JavaScript UDF file. For
     example, gs://MyBucket/udf.js.
 *   javascriptTextTransformFunctionName: Name of the JavaScript UDF function.

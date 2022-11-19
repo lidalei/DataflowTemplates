@@ -17,6 +17,8 @@ package com.google.cloud.teleport.v2.templates;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.teleport.v2.coders.FailsafeElementCoder;
 import com.google.cloud.teleport.v2.options.BigQueryCommonOptions.WriteOptions;
 import com.google.cloud.teleport.v2.options.PubsubCommonOptions.ReadSubscriptionOptions;
@@ -34,10 +36,14 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.coders.NullableCoder;
 import org.apache.beam.sdk.coders.StringUtf8Coder;
+import org.apache.beam.sdk.extensions.protobuf.ProtoDomain;
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write;
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.Method;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO;
@@ -96,6 +102,7 @@ public final class PubsubProtoToBigQuery {
     void setPreserveProtoFieldNames(Boolean value);
 
     @Description("GCS path to JSON file that represents the BigQuery table schema.")
+    @Required
     String getBigQueryTableSchemaPath();
 
     void setBigQueryTableSchemaPath(String value);
@@ -123,8 +130,8 @@ public final class PubsubProtoToBigQuery {
     Descriptor descriptor = getDescriptor(options);
     PCollection<String> maybeForUdf =
         pipeline
-            .apply("Read From Pubsub", readPubsubMessages(options, descriptor))
-            .apply("Dynamic Message to TableRow", new ConvertDynamicProtoMessageToJson(options));
+            .apply("Read From Pubsub", readPubsubMessages(options))
+            .apply("Message to TableRow", new ConvertMessageToJson(options, descriptor));
 
     runUdf(maybeForUdf, options)
         .apply("Write to BigQuery", writeToBigQuery(options, descriptor))
@@ -156,9 +163,9 @@ public final class PubsubProtoToBigQuery {
   }
 
   /** Returns the {@link PTransform} for reading Pub/Sub messages. */
-  private static Read<DynamicMessage> readPubsubMessages(
-      PubSubProtoToBigQueryOptions options, Descriptor descriptor) {
-    return PubsubIO.readProtoDynamicMessages(descriptor)
+  private static Read<PubsubMessage> readPubsubMessages(
+      PubSubProtoToBigQueryOptions options) {
+    return PubsubIO.readMessagesWithAttributesAndMessageId()
         .fromSubscription(options.getInputSubscription())
         .withDeadLetterTopic(options.getOutputTopic());
   }
@@ -178,36 +185,74 @@ public final class PubsubProtoToBigQuery {
             .withMethod(Method.STREAMING_INSERTS);
 
     String schemaPath = options.getBigQueryTableSchemaPath();
-    if (Strings.isNullOrEmpty(schemaPath)) {
-      return write.withSchema(
-          SchemaUtils.createBigQuerySchema(descriptor, options.getPreserveProtoFieldNames()));
-    } else {
-      return write.withJsonSchema(GCSUtils.getGcsFileAsString(schemaPath));
-    }
+    return write.withJsonSchema(GCSUtils.getGcsFileAsString(schemaPath));
   }
 
   /** {@link PTransform} that handles converting {@link PubsubMessage} values to JSON. */
-  private static class ConvertDynamicProtoMessageToJson
-      extends PTransform<PCollection<DynamicMessage>, PCollection<String>> {
+  private static class ConvertMessageToJson
+      extends PTransform<PCollection<PubsubMessage>, PCollection<String>> {
     private final boolean preserveProtoName;
+    private final ProtoDomain domain;
+    private final String fullMessageName;
 
-    private ConvertDynamicProtoMessageToJson(PubSubProtoToBigQueryOptions options) {
+    private ConvertMessageToJson(PubSubProtoToBigQueryOptions options, Descriptor descriptor) {
       this.preserveProtoName = options.getPreserveProtoFieldNames();
+      // Descriptor is not serializable.
+      this.domain = ProtoDomain.buildFrom(descriptor);
+      this.fullMessageName = descriptor.getFullName();
     }
 
     @Override
-    public PCollection<String> expand(PCollection<DynamicMessage> input) {
+    public PCollection<String> expand(PCollection<PubsubMessage> input) {
       return input.apply(
           "Map to JSON",
           MapElements.into(TypeDescriptors.strings())
               .via(
                   message -> {
                     try {
+                      Map<String, String> completeData = new HashMap<>();
+
+                      String messageId = message.getMessageId();
+                      if (messageId != null) {
+                        completeData.put("message_id", messageId);
+                      }
+
+
+                      DynamicMessage payload =
+                          DynamicMessage.parseFrom(
+                              domain.getDescriptor(fullMessageName), message.getPayload());
+
                       JsonFormat.Printer printer = JsonFormat.printer();
-                      return preserveProtoName
-                          ? printer.preservingProtoFieldNames().print(message)
-                          : printer.print(message);
-                    } catch (InvalidProtocolBufferException e) {
+                      String data =
+                          preserveProtoName
+                              ? printer.preservingProtoFieldNames().print(payload)
+                              : printer.print(payload);
+
+                      completeData.put("data", data);
+
+                      Map<String, String> telemetryAttributes = message.getAttributeMap();
+                      if (telemetryAttributes != null) {
+                        for (Map.Entry<String, String> entry : telemetryAttributes.entrySet()) {
+                          String key = entry.getKey();
+                          String value = entry.getValue();
+
+                          if (key.equals("vehicleId")) {
+                            completeData.put("vehicle_id", value);
+                          } else if (key.equals("receivedAt")) {
+                            completeData.put(
+                                "received_at",
+                                Instant.ofEpochMilli(Long.parseLong(value)).toString());
+                          }
+                        }
+
+                        completeData.put(
+                            "attributes",
+                            new ObjectMapper().writeValueAsString(telemetryAttributes));
+                      }
+
+                      return new ObjectMapper().writeValueAsString(completeData);
+
+                    } catch (InvalidProtocolBufferException | JsonProcessingException e) {
                       throw new RuntimeException(e);
                     }
                   }));

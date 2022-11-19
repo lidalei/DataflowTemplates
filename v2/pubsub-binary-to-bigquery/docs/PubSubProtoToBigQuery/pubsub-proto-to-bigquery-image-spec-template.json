@@ -1,5 +1,5 @@
 {
-  "image": "gcr.io/project-id/image-name",
+  "image": "europe-west1-docker.pkg.dev/com-ridedott-data-development/dataflow-template-docker/pubsub-binary-to-bigquery",
   "metadata": {
     "name": "PubSub_Proto_to_BigQuery",
     "description": "Stream Proto records from Pub/Sub to BigQuery",
@@ -39,7 +39,7 @@
           "^gs:\\/\\/[^\\n\\r]+$"
         ],
         "param_type": "GCS_READ_FILE",
-        "is_optional": true
+        "is_optional": false
       },
       {
         "name": "inputSubscription",
