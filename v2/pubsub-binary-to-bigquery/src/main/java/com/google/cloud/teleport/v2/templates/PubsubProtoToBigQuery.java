@@ -36,7 +36,6 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.beam.sdk.Pipeline;
@@ -163,8 +162,7 @@ public final class PubsubProtoToBigQuery {
   }
 
   /** Returns the {@link PTransform} for reading Pub/Sub messages. */
-  private static Read<PubsubMessage> readPubsubMessages(
-      PubSubProtoToBigQueryOptions options) {
+  private static Read<PubsubMessage> readPubsubMessages(PubSubProtoToBigQueryOptions options) {
     return PubsubIO.readMessagesWithAttributesAndMessageId()
         .fromSubscription(options.getInputSubscription())
         .withDeadLetterTopic(options.getOutputTopic());
@@ -217,12 +215,12 @@ public final class PubsubProtoToBigQuery {
                         completeData.put("message_id", messageId);
                       }
 
-
                       DynamicMessage payload =
                           DynamicMessage.parseFrom(
                               domain.getDescriptor(fullMessageName), message.getPayload());
 
                       JsonFormat.Printer printer = JsonFormat.printer();
+                      // Unknown fields will cause an InvalidProtocolBufferException
                       String data =
                           preserveProtoName
                               ? printer.preservingProtoFieldNames().print(payload)
@@ -232,19 +230,6 @@ public final class PubsubProtoToBigQuery {
 
                       Map<String, String> telemetryAttributes = message.getAttributeMap();
                       if (telemetryAttributes != null) {
-                        for (Map.Entry<String, String> entry : telemetryAttributes.entrySet()) {
-                          String key = entry.getKey();
-                          String value = entry.getValue();
-
-                          if (key.equals("vehicleId")) {
-                            completeData.put("vehicle_id", value);
-                          } else if (key.equals("receivedAt")) {
-                            completeData.put(
-                                "received_at",
-                                Instant.ofEpochMilli(Long.parseLong(value)).toString());
-                          }
-                        }
-
                         completeData.put(
                             "attributes",
                             new ObjectMapper().writeValueAsString(telemetryAttributes));
