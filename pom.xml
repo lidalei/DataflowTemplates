@@ -26,16 +26,64 @@
   <packaging>pom</packaging>
   <description>
     Unifies all the template libraries under one POM for easier automation and
-    to allow
-    for more reusable and modular dependencies.
+    to allow for more reusable and modular dependencies.
   </description>
 
   <properties>
-    <maven-source-plugin.version>3.0.1</maven-source-plugin.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <java.version>11</java.version>
+
+    <!-- Plugins -->
     <maven-checkstyle-plugin.version>3.0.0</maven-checkstyle-plugin.version>
-    <spotless-maven-plugin.version>2.12.1</spotless-maven-plugin.version>
+    <maven-compiler-plugin.version>3.6.2</maven-compiler-plugin.version>
+    <maven-dependency-plugin.version>3.1.2</maven-dependency-plugin.version>
+    <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
+    <maven-jar-plugin.version>3.0.2</maven-jar-plugin.version>
+    <maven-javadoc-plugin.version>3.0.0-M1</maven-javadoc-plugin.version>
+    <maven-shade-plugin.version>3.0.0</maven-shade-plugin.version>
+    <maven-source-plugin.version>3.0.1</maven-source-plugin.version>
+    <os-maven-plugin.version>1.5.0.Final</os-maven-plugin.version>
+
+    <!-- Common dependency versions -->
+    <beam.version>2.43.0</beam.version>
     <checkstyle.version>8.7</checkstyle.version>
+    <cloud-libraries-bom.version>26.1.3</cloud-libraries-bom.version>
+    <conscrypt.version>2.5.2</conscrypt.version>
+    <hamcrest.version>2.1</hamcrest.version>
+    <mockito-core.version>3.0.0</mockito-core.version>
+    <json.version>20200518</json.version>
+    <junit.version>4.13.1</junit.version>
+    <re2j.version>1.5</re2j.version>
+    <slf4j.version>1.7.25</slf4j.version>
+    <spotless-maven-plugin.version>2.12.1</spotless-maven-plugin.version>
+    <surefire.version>2.21.0</surefire.version>
+    <truth.version>1.0.1</truth.version>
+    <excluded.spanner.tests></excluded.spanner.tests>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.apache.beam</groupId>
+        <artifactId>beam-sdks-java-bom</artifactId>
+        <version>${beam.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.google.cloud</groupId>
+        <artifactId>libraries-bom</artifactId>
+        <version>${cloud-libraries-bom.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>${junit.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <build>
     <pluginManagement>
@@ -56,6 +104,16 @@
     </pluginManagement>
 
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire.version}</version>
+        <configuration>
+          <!-- Exclude Cloud Spanner integration tests that require a GCP project to run.
+          They can be run manually using 'mvn -Dexcluded.spanner.tests="" -Dtest=<testname> test' -->
+          <excludedGroups>com.google.cloud.teleport.metadata.TemplateIntegrationTest,${excluded.spanner.tests}</excludedGroups>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
@@ -136,22 +194,58 @@
     </plugins>
   </build>
 
-     <profiles>
-     <profile>
-       <id>oss-build</id>
-       <activation>
-          <activeByDefault>true</activeByDefault>
-       </activation>
-       <modules>
-         <module>syndeo-template</module>
-       </modules>
-     </profile>
-   </profiles>
+  <profiles>
+    <profile>
+      <id>templatesIntegrationTests</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <properties>
+        <!-- Skip coverage checks, unit tests are skipped -->
+        <jacoco.skip>true</jacoco.skip>
+        <!-- Skip shade for faster runs -->
+        <skipShade>true</skipShade>
+        <!-- Some modules may yield no integration tests -->
+        <failIfNoTests>false</failIfNoTests>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${surefire.version}</version>
+            <configuration combine.self="override">
+              <includes>
+                <include>**/*IT.java</include>
+              </includes>
+              <excludedGroups></excludedGroups>
+              <groups>
+                com.google.cloud.teleport.metadata.TemplateIntegrationTest
+              </groups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
 
+    <profile>
+      <id>oss-build</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <modules>
+        <module>syndeo-template</module>
+      </modules>
+    </profile>
+  </profiles>
 
   <modules>
+    <module>metadata</module>
+    <module>plugins</module>
     <module>it</module>
     <module>v1</module>
     <module>v2</module>
+    <module>structured-logging</module>
+    <module>plaintext-logging</module>
   </modules>
 </project>

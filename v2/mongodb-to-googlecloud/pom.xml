@@ -35,7 +35,6 @@
     </description>
 
     <dependencies>
-
         <dependency>
             <groupId>org.apache.beam</groupId>
             <artifactId>beam-sdks-java-io-mongodb</artifactId>
@@ -45,24 +44,14 @@
             <artifactId>common</artifactId>
             <version>${project.version}</version>
         </dependency>
-    </dependencies>
 
-    <build>
-        <directory>${mvn-target-dir}</directory>
-        <plugins>
-            <plugin>
-                <groupId>com.google.cloud.tools</groupId>
-                <artifactId>jib-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>build</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
+        <!-- Test Dependencies -->
+        <dependency>
+            <groupId>com.google.truth</groupId>
+            <artifactId>truth</artifactId>
+            <version>${truth.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
 </project>

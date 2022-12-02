@@ -77,10 +77,6 @@ the following content:
     </dependency>
   </dependencies>
 
-  <build>
-    <directory>${mvn-target-dir}</directory>
-  </build>
-
 </project>
 ```
 
@@ -336,7 +332,7 @@ such as missing Javadocs.
 Once formatted, you can run:
 
 ```shell
-mvn clean install -pl v2/wordcount -am \
+mvn clean package -pl v2/wordcount -am \
   -Dmaven.test.skip \
   -Djib.skip
 ```
@@ -443,7 +439,7 @@ equivalent.
 You can run the unit test with the following command:
 
 ```shell
-mvn clean install -pl v2/wordcount -am \
+mvn clean package -pl v2/wordcount -am \
   -Dtest=WordCountTest -DfailIfNoTests=false \
   -Djib.skip
 ```
@@ -462,7 +458,6 @@ that it now looks like:
 
 ```xml
   <build>
-    <directory>${mvn-target-dir}</directory>
     <plugins>
       <plugin>
         <groupId>com.google.cloud.tools</groupId>
@@ -591,7 +586,8 @@ gcloud dataflow flex-template build "$TEMPLATE_SPEC_GCSPATH" \
 
 export JOB_NAME="wordcount-$USERNAME"
 
-gcloud dataflow flex-template run "$JOB_NAME-$(date +'%Y%m%d%H%M%S')" --region "$REGION" \
+gcloud dataflow flex-template run "$JOB_NAME-$(date +'%Y%m%d%H%M%S')" \
+  --project "$PROJECT" --region "$REGION" \
   --template-file-gcs-location "$TEMPLATE_SPEC_GCSPATH" \
   --parameters inputFile="gs://dataflow-samples/shakespeare/kinglear.txt"  \
   --parameters outputPath="gs://$BUCKET_NAME/output/wordcount/$USERNAME/wordcount"
