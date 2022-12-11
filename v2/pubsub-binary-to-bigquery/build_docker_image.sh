@@ -5,7 +5,6 @@ set -euox pipefail
 
 export JAVA_HOME=/usr/local/Cellar/openjdk@11/11.0.16.1_1/libexec/openjdk.jdk/Contents/Home
 
-#mvn clean install
 mvn spotless:apply
 
 export PROJECT=com-ridedott-data-development
